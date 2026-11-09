@@ -1,0 +1,39 @@
+-- ====================================================================
+-- 1. โหลดสคริปต์กันดักตัวเดิมของคุณ (anti-ran)
+-- ====================================================================
+loadstring(game:HttpGet("https://raw.githubusercontent.com/GURANKUB/Anti-ran/refs/heads/main/anti-ran.lua"))()
+
+-- รอให้สคริปต์เดิมทำงานและตั้งค่า Hook ของมันให้เสร็จเรียบร้อยก่อน
+task.wait(1.5) 
+
+-- ====================================================================
+-- 2. เกราะป้องกัน KFC (KFC Defeater)
+-- ดักจับค่าตั้งแต่ชั้นนอกสุด เพื่อให้ KFC เจอข้อมูลขยะและถอดรหัสไม่สำเร็จ
+-- ====================================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- ใช้ hookmetamethod ครอบทับ Hook เดิมของคุณอีกชั้น
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", function(self, key)
+    -- ดักจับเมื่อมีการพยายามอ่านค่า SoundId
+    if key == "SoundId" and typeof(self) == "Instance" and self:IsA("Sound") then
+        
+        -- ตรวจสอบว่าเป็นเพลงที่เปิดผ่าน Boombox หรือยานพาหนะ (PlayersChoice)
+        if self.Name == "PlayersChoice" then
+            local char = LocalPlayer.Character
+            -- ตรวจสอบว่าเป็นเสียงของเราหรือไม่ (อยู่ภายใต้ตัวละครของเรา)
+            if char and (self:IsDescendantOf(char) or self:IsDescendantOf(LocalPlayer)) then
+                
+                -- ส่งคืนค่า "rbxassetid://" ที่ไม่มีตัวเลขให้ KFC ถอดรหัส
+                -- KFC จะพยายามหาตัวเลขแต่ไม่เจอ -> ขึ้นว่า "ถอดรหัสไม่สำเร็จ"
+                return "rbxassetid://" 
+                
+            end
+        end
+    end
+    -- หากเป็น Property อื่น หรือไม่ใช่ของเรา ให้ทำงานตามปกติ (ผ่าน Hook เดิมของคุณ)
+    return oldIndex(self, key)
+end)
+
+print("✅ [Anti-KFC] โหลดสำเร็จ! ระบบดักเพลงของ KFC จะไม่สามารถถอดรหัสเพลงของคุณได้อีกต่อไป")
