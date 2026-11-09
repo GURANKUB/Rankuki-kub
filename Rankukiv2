@@ -1,0 +1,29 @@
+-- ====================================================================
+-- 1. โหลดสคริปต์กันดักตัวเดิมของคุณ (anti-ran)
+-- ====================================================================
+loadstring(game:HttpGet("https://raw.githubusercontent.com/GURANKUB/Anti-ran/refs/heads/main/anti-ran.lua"))()
+
+-- รอให้สคริปต์เดิมทำงานและตั้งค่า Hook ของมันให้เสร็จเรียบร้อยก่อน
+task.wait(1.5) 
+
+-- ====================================================================
+-- 2. เกราะป้องกัน KFC V2 (ดักจับทุก Object ไม่สนสถานที่)
+-- ====================================================================
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", function(self, key)
+    -- ดักจับเมื่อมีการพยายามอ่านค่า SoundId จาก Sound ทุกตัว
+    if key == "SoundId" and typeof(self) == "Instance" and self:IsA("Sound") then
+        
+        -- เปลี่ยนเงื่อนไข: ดักจับทุก Sound ที่ชื่อ PlayersChoice ทันที
+        -- เพื่อให้ครอบคลุมกรณีที่เพื่อนเปิดเพลงผ่านสเก็ตบอร์ด (ซึ่งอยู่นอก Character)
+        if self.Name == "PlayersChoice" then
+            -- ส่งคืนค่า ID เปล่า เพื่อให้ KFC นำไปถอดรหัสแล้วพังทันที
+            return "rbxassetid://" 
+        end
+    end
+    
+    -- Property อื่นๆ ให้ทำงานปกติ
+    return oldIndex(self, key)
+end)
+
+print("✅ [Anti-KFC V2] โหลดสำเร็จ! ดักจับได้ทุก Object แม้จะอยู่บนสเก็ตบอร์ด")
